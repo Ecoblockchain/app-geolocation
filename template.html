@@ -1,0 +1,466 @@
+<! -- Fix for Bootstrap css with Google Maps https://github.com/twitter/bootstrap/issues/1552 -->
+<style type="text/css">
+    .map_canvas label {
+        width: auto;
+        display: inline;
+    }
+    .map_canvas img {
+        max-width: none;
+    }
+
+    .layersDiv label {
+        color: white;
+    }
+</style>
+<div class="row">
+    <!-- Success and Error Messages for the user --> 
+    <div class="span8" style="height:50px">
+        <!-- Success alert box -->
+        <div id="success" class="alert alert-success" style="display:none;">
+            <a class="close">×</a><strong>Well done!</strong> Your answer has been saved
+        </div>
+        <!-- Task completed alert box -->
+        <div id="taskcompleted" class="alert alert-info" style="display:none;">
+            <strong>The task has been completed!</strong> Thanks a lot!
+        </div>
+        <!-- Task loading alert box -->
+        <div id="loadingTask" class="alert alert-info">
+            <strong>Loading task...</strong>
+        </div>
+        <!-- Task completed alert box -->
+        <div id="finish" class="alert alert-success" style="display:none;">
+            <strong>Congratulations!</strong> You have participated in all available tasks!
+            <br/>
+            <div class="alert-actions">
+                <a class="btn small" href="/">Go back</a>
+                <a class="btn small" href="/app">or, Check other applications</a>
+            </div>
+        </div>
+        <!-- Error alert box -->
+        <div id="error" class="alert alert-error" style="display:none;">
+            <a class="close">×</a>
+            <strong>Error!</strong> Something went wrong, please contact the site administrators
+        </div>
+        <!-- Old Browser alert box -->
+        <div id="oldBrowser" class="alert alert-info" style="display:none;">
+            <a class="close">×</a>
+            <p><strong>Sorry!</strong> Your web browser does not support the application.<p>
+            <div class="alert-actions">
+<a c    lass="btn small" href="/app">Please, try with another application</a>
+            </div>
+        </div>
+    </div><!-- End of span8 offset2-->
+</div><!-- End of Row-->
+
+<div class="row">
+  <div class="skeleton span8">
+    <div id="question">
+      <h1>Question</h1>
+      <h1 id="english">City</h1>
+      <div style="padding-bottom:5px;">
+        <button id="default" class="btn btn-success btn-submit">
+            <i class="icon icon-white icon-map-marker"></i> Blue marker is correct! 
+        </button>
+        <button id="point" class="btn btn-info">
+            <i class="icon icon-white icon-map-marker"></i> Fix the blue Marker
+        </button>
+        <button id="noLocation" class="btn btn-submit">I cannot find the location</button>
+      </div>
+      <div id="map"></div>
+      <i class="icon-map-marker"></i> Location: <strong> Longitude:</strong> <span id="lon"></span>, 
+      <strong>Latitude:</strong> <span id="lat"></span>
+    </div>
+    <div id="answer">
+        <button id="answerbtn" class="btn btn-success btn-submit" style="display:none;"><i class="icon-check icon-white"></i> Save these coordinates</button>
+    </div>
+  </div>
+  <div class="span4">
+      <p>Task: <span id="task-id" class="label label-warning">#</span></p>
+      <div class="input-append" style="margin-top:5px;">
+          <label for="locationRef"><strong>Search for Street, City, Country</strong></label>
+          <input id="locationRef" class="span4" type="text">
+          <button class="btn" type="button" id="searchBtn"><i class="icon-search"></i> Search!</button>
+      </div>
+
+      <div id="searching" class="alert alert-info" style="display:none">
+          <strong>Searching...</strong>
+      </div>
+      <div id="searchingDone" class="alert alert-success" style="display:none">
+          <strong>Location found!</strong>
+      </div>
+      <div id="searchingError" class="alert alert-warning" style="display:none;margin-top:5px;">
+          <strong>Oops! Location not found</strong> Please add the marker yourself
+      </div>
+  </div>
+</div>
+
+<script src="http://www.openlayers.org/api/OpenLayers.js"></script>
+<script src="http://maps.google.com/maps/api/js?v=3.6&amp;sensor=false"></script>
+<!-- PyBossa interface -->
+<script>
+// This function will load the marker of the city, and center the map on it
+function search(map, city, zoom) {
+    if (city) {
+        var place = city;
+        $("#searchingError").hide();
+        $("#searchingDone").hide();
+    }
+    else {
+        $("#searching").show();
+        $("#searchingDone").hide();
+        $("#searchingError").hide();
+
+        if ($('#locationRef').val()) {
+            var place = $("#locationRef").val(); 
+            var grade = place.split(",");
+            var zoom = 5;
+            if (grade.length <= 1) {
+                zoom = 5;
+            }
+            if (grade.length >= 2) {
+                zoom = 14;
+            }
+
+        }
+        else {
+            $("#searching").hide();
+            alert("Please, paste the location city or country to search in the map");
+            return
+        }
+    }
+
+    if (zoom) {
+        var zoom = zoom;
+    }
+    else {
+        var zoom = 5;
+    }
+
+    // Geocode the place using Nominatim OSM service
+    $.getJSON('http://nominatim.openstreetmap.org/search/' + place + '?format=json', function(output) {
+        if (output.length >= 1) {
+            // Clean previous markers
+            if (place != 'kenya') {
+                $("#locationRef").val(output[0].display_name);
+            }
+            $("#navigate").addClass("active");
+            $("#point").removeClass("disabled");
+            $("#point").removeClass("active");
+            // Create a LonLat object to load the place marker
+            var lonLat = new OpenLayers.LonLat(output[0].lon, output[0].lat)
+                .transform(
+                    new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
+                    map.getProjectionObject() // to Spherical Mercator Projection
+                );
+            // Set the marker position
+            point = new OpenLayers.Geometry.Point(lonLat.lon, lonLat.lat);
+            // Center the map
+            map.setCenter(lonLat, zoom);
+            // Reset the lon & lat span objects
+            $("#lon").text("-");
+            $("#lat").text("-");
+
+            // Only show the messages when looking for user input
+            if ($('#locationRef').val()) {
+                $("#searching").hide().fadeOut();
+                $("#searchingDone").show().fadeIn().delay(2000).fadeOut();
+            }
+        }
+        else {
+            // City not found, sorry
+            // Warn the user and try with another place
+            $("#searching").hide().fadeOut();
+            $("#searchingError").show();
+        }
+    });
+}
+
+
+// This function will load the marker of the city, and center the map on it
+function addCity(task) {
+    // As this action could take some time, start the spinner
+    // Geocode the city using Nominatim OSM service
+    $.getJSON('http://nominatim.openstreetmap.org/search/' + task.info.englishLocation + '?format=json', function(output) {
+        if (output.length >= 1) {
+            // Clean previous markers
+            $("#navigate").addClass("active");
+            $("#point").removeClass("disabled");
+            $("#point").removeClass("active");
+            task.incidentLayer.removeAllFeatures();
+            task.cityLayer.removeAllFeatures();
+            // Create a LonLat object to load the city marker
+            var lonLat = new OpenLayers.LonLat(output[0].lon, output[0].lat)
+                .transform(
+                    new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
+                    task.map.getProjectionObject() // to Spherical Mercator Projection
+                );
+            // Set the marker position
+            var point = new OpenLayers.Geometry.Point(lonLat.lon, lonLat.lat);
+            task.cityLayer.addFeatures([new OpenLayers.Feature.Vector(point)]);
+            // Center the map
+            task.map.setCenter(lonLat,13);
+            // Reset the lon & lat span objects
+            var tmp = point.clone();
+            tmp.transform(
+                    task.map.getProjectionObject(), // from Spherical Mercator Projection
+                    new OpenLayers.Projection("EPSG:4326") // to transform from WGS 1984
+            );
+            $("#lon").text(tmp.x);
+            $("#lat").text(tmp.y);
+            task.lon = tmp.x;
+            task.lat = tmp.y;
+        }
+        else {
+            // City not found, sorry
+            // Warn the user and try with another city
+            // Syria LonLat
+            var lonLat = new OpenLayers.LonLat("39.0494106", "34.6401861")
+                .transform(
+                    new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
+                    task.map.getProjectionObject() // to Spherical Mercator Projection
+                );
+            // Set the marker position
+            point = new OpenLayers.Geometry.Point(lonLat.lon, lonLat.lat);
+            task.cityLayer.addFeatures([new OpenLayers.Feature.Vector(point)]);
+            // Center the map
+            task.map.setCenter(lonLat, 6);
+            $("#lon").text("-");
+            $("#lat").text("-");
+        }
+    });
+}
+
+pybossa.taskLoaded(function(task, deferred){
+    if ( !$.isEmptyObject(task) ) {
+        var div_map = $("<div/>", {'id': "map_" + task.id, 'class': 'map_canvas'});
+        div_map.css("width", "620px");
+        div_map.css("height", "310px");
+        div_map.css("display", "none");
+
+        // We need to append the div element asap otherwise OpenLayers will fail
+        $("#map").append(div_map);
+
+        var map = new OpenLayers.Map('map_' + task.id, {
+            controls: [
+                new OpenLayers.Control.Navigation(),
+                new OpenLayers.Control.PanZoom(),
+                new OpenLayers.Control.LayerSwitcher(),
+                new OpenLayers.Control.MousePosition({displayProjection: new OpenLayers.Projection("EPSG:4326")}),
+                new OpenLayers.Control.ScaleLine(),
+                new OpenLayers.Control.Attribution()
+                ]
+        });
+
+        // Layers
+        // Open Street Map (default layer)
+        map.addLayer(new OpenLayers.Layer.OSM("Open Street Map"));
+
+        // Google Maps Satellite layer
+        map.addLayer(new OpenLayers.Layer.Google(
+            "Google Satellite",
+            {type: google.maps.MapTypeId.SATELLITE}
+        ));
+
+        // Google Maps Physical layer
+        map.addLayer(new OpenLayers.Layer.Google(
+            "Google Physical",
+            {type: google.maps.MapTypeId.TERRAIN}
+        ));
+
+        // Icon for the City Marker
+        var styleMapCity = new OpenLayers.StyleMap({
+            pointRadius: 15,
+            externalGraphic: 'http://img225.imageshack.us/img225/5237/youarehere2.png'
+        });
+
+        // Icon for the Urban Park Marker 
+        var styleMapIncident = new OpenLayers.StyleMap({
+            pointRadius: 15,
+            externalGraphic: 'http://i.imgur.com/zC3zfAy.png'
+        });
+
+        // Layer for placing the city marker
+        var cityLayer = new OpenLayers.Layer.Vector("City marker", {
+            styleMap: styleMapCity,
+            attribution: 'Marker Icons by <a href="http://mapicons.nicolasmollet.com/">Nicolas Mollet</a>'
+        });
+        map.addLayer(cityLayer);
+        task.cityLayer = cityLayer;
+
+        // Layer for placing the urban park marker
+        var incidentLayer = new OpenLayers.Layer.Vector("Urban park marker", {
+            styleMap: styleMapIncident,
+            attribution: 'Marker Icons by <a href="http://mapicons.nicolasmollet.com/">Nicolas Mollet</a>'
+        });
+        map.addLayer(incidentLayer);
+        task.incidentLayer = incidentLayer;
+
+        // Function to allow only the addition of one urban park per city
+        // The function gets the feature (point) and gets its location, transforms it to the right projection
+        // loads the lon and at into the HTML skeleton and disables the toolbar, so no more points can be added
+        disablePoint = function(feature) { 
+            if ($("#answerbtn").hasClass("disabled")) {
+                $("#answerbtn").removeClass('disabled');
+            }
+
+            $("#lat").text(feature.geometry.y);
+            var tmp = feature.geometry.clone();
+            tmp.transform(
+                    task.map.getProjectionObject(), // from Spherical Mercator Projection
+                    new OpenLayers.Projection("EPSG:4326") // to transform from WGS 1984
+            );
+            $("#lon").text(tmp.x);       
+            $("#lat").text(tmp.y);       
+            task.lon = tmp.x;
+            task.lat = tmp.y;
+            task.drawControls['point'].deactivate();
+        }
+
+        // Default location to load the map
+        var lonLat = new OpenLayers.LonLat(-0.1279688 ,51.5077286 )
+            .transform(
+                new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
+                new OpenLayers.Projection("EPSG:900913") // to Spherical Mercator Projection
+            );
+
+        // Enable drag & drop in the urban park Layer
+        var drag = new OpenLayers.Control.DragFeature(incidentLayer, {
+            onComplete: function() {
+                var incidentPoint = task.incidentLayer.features[0].geometry
+                var tmp = incidentPoint.clone();
+                tmp.transform(
+                        task.map.getProjectionObject(), // from Spherical Mercator Projection
+                        new OpenLayers.Projection("EPSG:4326") // to transform from WGS 1984
+                );
+                // When the marker has been dropped, update the lon & lat of the urban park
+                $("#lon").text(tmp.x);       
+                $("#lat").text(tmp.y);       
+                task.lon = tmp.x;
+                task.lat = tmp.y;
+            }
+        
+        });
+        // Add the drag & drop control into the map
+        map.addControl(drag);
+        // Activate drag & drop
+        drag.activate();
+
+        var drawControls = {
+            point:      new OpenLayers.Control.DrawFeature(incidentLayer, OpenLayers.Handler.Point, 
+                        { 'featureAdded': disablePoint})
+        }
+
+        // Add them to the map
+        for (var key in drawControls) {
+            map.addControl(drawControls[key]);
+        }
+        task.drawControls = drawControls;
+
+        task.map = map;
+        task.lon = 0;
+        task.lat = 0;
+
+        addCity(task);
+        task.info.answer = {'task_id': task.id,
+                       'latitude': 0,
+                       'longitude': 0,
+                       'arabic': task.info.arabic,
+                       'english': task.info.english,
+                       'arabicLocation': task.info.arabicLocation,
+                       'englishLocation': task.info.englishLocation
+                       };
+
+        $("#loadingTask").hide();
+        deferred.resolve(task);
+        } // End if task empty
+    else {
+        deferred.resolve(task);
+        }
+});
+
+pybossa.presentTask(function(task, deferred){
+    if ( !$.isEmptyObject(task) ) {
+        if (task.state=='completed') {
+            $('#controls').hide();
+            $('#answer').hide();
+            $('#disqus_thread').hide();
+            $('#taskcompleted').show();
+        }
+
+        //addCity(task);
+
+        $("#noLocation").show();
+        $("#answerbtn").hide();
+
+        $("#question h1").text(task.info.question);
+        $("#english").html(task.info.englishLocation + '  <small dir="rtl">' + task.info.arabicLocation + "</small>");
+        $("#task-id").text(task.id);
+        $("#loadingTask").hide();
+        $("#map_" + task.id).show();
+        if ($("#point").hasClass("disabled")) {
+            $("#point").removeClass("disabled");
+        }
+
+        $("#point").off('click').on('click', function(){
+            //toggleControl('point');
+            task.drawControls['point'].activate();
+            $("#point").addClass("disabled");
+            $("#answerbtn").show();
+        });
+
+        $("#searchBtn").off('click').on('click', function(){
+            search(task.map);
+        });
+
+
+        $(".btn-submit").off('click').on('click', function(evt){
+            // Convert the feature location, the urban park marker position, into the GeoJSON format
+            var btnClicked = $(evt.target).attr("id");
+            var geojson = new OpenLayers.Format.GeoJSON({
+                'internalProjection': task.map.baseLayer.projection,
+                'externalProjection': new OpenLayers.Projection("EPSG:4326")
+                });
+
+            console.log(task.cityLayer.features.length);
+            if ((task.incidentLayer.features.length == 0) && (btnClicked == "noLocation")) {
+                incident = "noLocation";
+                }
+            else if ((task.cityLayer.features.length == 1) && (btnClicked == "default")) {
+                incident = JSON.parse(geojson.write(task.cityLayer.features[0]));
+                }
+            else {
+                if ((task.incidentLayer.features.length > 0) && (btnClicked == "answerbtn")) {
+                    incident = JSON.parse(geojson.write(task.incidentLayer.features[0]));
+                    }
+                else {
+                    alert("Please, add a marker if you think there is one!");
+                    return
+                    }
+            }
+
+            console.log(task.id);
+            console.log(incident);
+
+            task.info.answer.latitude = task.lat;
+            task.info.answer.longitude = task.lon;
+            task.info.answer.geojson = incident;
+
+            pybossa.saveTask( task.id, task.info.answer).done( function(data) {
+                // Show the feedback div
+                $("#success").fadeIn(); 
+                $("#map_" + task.id).remove();
+                // Fade out the pop-up after a 2000 miliseconds
+                setTimeout(function() { $("#success").fadeOut() }, 2000);
+                deferred.resolve();
+            });
+        });
+    }
+    else {
+        $(".skeleton").hide();
+        $("#finish").fadeIn();
+    }
+});
+
+pybossa.run('geolocate');
+</script>
+

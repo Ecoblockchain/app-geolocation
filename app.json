@@ -1,0 +1,7 @@
+{
+    "name": "geolocate",
+    "short_name": "geolocate",
+    "thumbnail": "",
+    "description": "Geolocate an address",
+    "question": "Add a marker for this location"
+}
